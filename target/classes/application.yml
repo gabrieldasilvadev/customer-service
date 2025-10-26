@@ -1,0 +1,48 @@
+server:
+  error:
+    include-stacktrace: never
+
+spring:
+  cloud:
+    aws:
+      credentials:
+        access-key: ${AWS_ACCESS_KEY:accesskey}
+        secret-key: ${AWS_SECRET_KEY:secretkey}
+      region:
+        static: ${AWS_REGION:us-east-1}
+  application:
+    name: customer-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/customer}
+    username: ${DB_USER:admin}
+    password: ${DB_PASS:123456}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    show-sql: ${DB_SHOW_SQL:true}
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    placeholder-replacement: false
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    try-it-out-enabled: true
+    filter: true
+    persist-authorization: true
+
+security:
+  jwt:
+    jwks-uri: ${SECURITY_JWT_JWKS_URI:http://localhost:8080/.well-known/jwks.json}
+    audience: ${SECURITY_JWT_AUDIENCE:fast-food-api}
+    algorithm: ${SECURITY_JWT_ALGORITHM:RS256}
+
+management:
+  endpoints:
+    web:
+      base-path: /

@@ -1,0 +1,1136 @@
+openapi: 3.0.3
+info:
+  version: '1.0'
+  title: Fast Food Tech Challenge - Sistema de Gestão
+  description: 'API para o sistema de autoatendimento de uma rede de fast food.
+
+    Este projeto gerencia clientes, produtos, pedidos e pagamentos, seguindo as melhores
+    práticas de arquitetura de software.
+
+    '
+  termsOfService: ''
+  license:
+    url: https://opensource.org/licenses/MIT
+    name: MIT License
+servers:
+  - url: http://localhost:8080
+    description: Localhost
+paths:
+  /customers:
+    get:
+      tags:
+        - Customer
+      summary: Buscar cliente por CPF
+      description: 'Localiza e retorna os dados de um cliente específico com base
+        no CPF fornecido.
+
+        O CPF deve ser informado como um parâmetro de consulta (query parameter) e
+        conter apenas os 11 dígitos.'
+      operationId: findCustomer
+      parameters:
+        - $ref: '#/components/parameters/CpfParam'
+      responses:
+        '200':
+          $ref: '#/components/responses/CustomerResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          description: Cliente não encontrado para o CPF informado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                message: Not Found
+                error:
+                  - Customer with document 11122233344 not found
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: &id001
+        - bearerAuth: []
+    post:
+      tags:
+        - Customer
+      summary: Criar um novo cliente
+      description: 'Registra um novo cliente no sistema.
+
+        O CPF é usado como um identificador único. Se um cliente com o mesmo CPF já
+        existir, a API retornará um erro de conflito.'
+      operationId: createCustomer
+      requestBody:
+        $ref: '#/components/requestBodies/CustomerRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/CustomerResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '409':
+          description: Cliente já cadastrado com o CPF informado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 409
+                message: Conflict
+                error:
+                  - Customer with document 53731833697 already exists
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+  /products:
+    get:
+      tags:
+        - Product
+      summary: Buscar produtos
+      description: 'Retorna uma lista de produtos.
+
+        - Se nenhum parâmetro for fornecido, retorna todos os produtos ativos.
+
+        - É possível filtrar por `category` para obter produtos de uma categoria específica.'
+      operationId: getProduct
+      parameters:
+        - $ref: '#/components/parameters/SKU'
+        - $ref: '#/components/parameters/CategoryParam'
+      responses:
+        '200':
+          $ref: '#/components/responses/Product200ListResponse'
+        '204':
+          description: Nenhum produto encontrado
+        '400':
+          description: Requisição inválida
+        '500':
+          description: Erro interno ao buscar produtos
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+    post:
+      tags:
+        - Product
+      summary: Criar um novo produto
+      description: Cria um novo produto no catálogo, exigindo dados como nome, SKU,
+        preço e categoria.
+      operationId: postProducts
+      requestBody:
+        $ref: '#/components/requestBodies/ProductCreateRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/CreateProduct201Response'
+        '400':
+          description: Dados inválidos. Por favor, valide as informações.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+  /products/{productId}:
+    delete:
+      tags:
+        - Product
+      summary: Inativar um produto
+      description: 'Realiza a inativação de um produto, tornando-o indisponível para
+        novos pedidos.
+
+        A operação é lógica e não remove o registro do banco de dados.'
+      operationId: deleteProducts
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: No Content
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+    put:
+      tags:
+        - Product
+      summary: Atualizar um produto
+      description: Atualiza os dados de um produto existente com base no seu `productId`.
+      operationId: putProducts
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        $ref: '#/components/requestBodies/ProductUpdateRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/UpdateProduct200Response'
+        '400':
+          description: Dados inválidos. Verifique os campos obrigatórios e o formato
+            enviado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Recurso não encontrado. Verifique o identificador ou o endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Erro interno no servidor. Tente novamente mais tarde ou contate
+            o suporte.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+  /orders:
+    get:
+      tags:
+        - Order
+      summary: Listar pedidos ativos
+      description: 'Retorna uma lista paginada de pedidos que não estão com status
+        `FINALIZED`.
+
+        A lista é ordenada pela seguinte prioridade de status: `DONE` > `IN_PREPARATION`
+        > `RECEIVED`.
+
+        Dentro de cada status, os pedidos são ordenados do mais antigo para o mais
+        novo.'
+      operationId: get-orders
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          $ref: '#/components/responses/OrderListResponse'
+        '204':
+          description: Nenhum pedido ativo encontrado
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+    post:
+      tags:
+        - Order
+      summary: Criar um novo pedido
+      description: 'Registra um novo pedido no sistema.
+
+
+        **Dados necessários:**
+
+        - `customerId`: O ID do cliente que está realizando o pedido.
+
+        - `items`: Uma lista de produtos que compõem o pedido. Para cada item, é preciso
+        fornecer o `productId`, a `quantity` e os dados do produto (`name`, `price`,
+        `category`).
+
+
+        **Comportamento:**
+
+        - O sistema calcula o subtotal e o total do pedido.
+
+        - O status inicial do pedido é definido como `RECEIVED`.'
+      operationId: post-orders
+      requestBody:
+        $ref: '#/components/requestBodies/CreateOrderRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/OrderCreatedResponse'
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+  /payments:
+    post:
+      tags:
+        - Payment
+      summary: Iniciar processo de pagamento
+      description: 'Inicia o processo de pagamento para um pedido específico.
+
+        A API recebe a solicitação e retorna imediatamente um `paymentId` e uma `paymentUrl`
+        (quando disponível) para redirecionamento ao gateway de pagamento.
+
+        O processamento do pagamento ocorre de forma assíncrona através do gateway
+        (ex: Mercado Pago).
+
+
+        **Comportamento:**
+
+        - Em caso de sucesso: retorna `paymentId` e `paymentUrl` para redirecionamento
+
+        - Em caso de falha: retorna `paymentId` e `paymentUrl` como `null`'
+      operationId: post-payments
+      requestBody:
+        $ref: '#/components/requestBodies/PaymentRequest'
+      responses:
+        '202':
+          description: Pagamento iniciado com sucesso. Contém o identificador único
+            da transação e a URL de pagamento para redirecionamento (quando disponível).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentInitiationResult'
+              examples:
+                PaymentSuccess:
+                  summary: Pagamento iniciado com sucesso
+                  description: Exemplo de resposta quando o pagamento é iniciado com
+                    sucesso e a URL do gateway é retornada
+                  value:
+                    paymentId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                    paymentUrl: https://www.mercadopago.com/mlb/payments/ticket?foo=bar
+                PaymentFailure:
+                  summary: Pagamento com falha
+                  description: Exemplo de resposta quando há falha na comunicação
+                    com o gateway, mas o pagamento foi registrado
+                  value:
+                    paymentId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                    paymentUrl: null
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+      security: *id001
+  /payments/{paymentId}:
+    get:
+      tags:
+        - Payment
+      summary: Consultar dados do pagamento
+      description: 'Retorna os detalhes completos de uma transação de pagamento, incluindo
+        status, valor e data de processamento.
+
+        Útil para verificar o resultado final de um pagamento.'
+      operationId: get-payments-paymentId
+      parameters:
+        - name: paymentId
+          in: path
+          description: Identificador único da transação de pagamento gerada durante
+            o processo de checkout.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/PaymentResponse'
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+  /payments/{paymentId}/status:
+    get:
+      tags:
+        - Payment
+      summary: Consultar status do pagamento
+      description: 'Endpoint otimizado para verificar rapidamente o status de uma
+        transação de pagamento.
+
+        Retorna apenas o `paymentId` e o `status` atual.'
+      operationId: get-payments-paymentId-status
+      parameters:
+        - name: paymentId
+          in: path
+          description: Identificador único da transação de pagamento gerada durante
+            o processo de checkout.
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/PaymentStatusResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ErrorResponse'
+      servers:
+        - url: http://localhost:8080
+          description: Localhost
+      security: *id001
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Autenticação de cliente via CPF
+      description: Gera um token JWT válido a partir do CPF informado.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cpf:
+                  type: string
+                  example: '53731833697'
+              required:
+                - cpf
+      responses:
+        '200':
+          description: Token JWT gerado com sucesso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          description: CPF não cadastrado ou inválido.
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Atualizar token JWT
+      description: Gera um novo token JWT a partir de um token válido informado no
+        header Authorization.
+      operationId: refresh
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Novo token JWT gerado com sucesso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          description: Token ausente ou inválido.
+tags:
+  - name: Customer
+    description: Operações relacionadas a clientes
+  - name: Product
+    description: Operações relacionadas a produtos
+  - name: Order
+    description: Operações relacionadas a pedidos
+  - name: Payment
+    description: Operações relacionadas a pagamentos
+components:
+  parameters:
+    CpfParam:
+      name: cpf
+      in: query
+      description: CPF do cliente no formato apenas números
+      schema:
+        type: string
+        pattern: ^\d{11}$
+    CategoryParam:
+      name: category
+      in: query
+      description: Enum da categoria
+      required: false
+      schema:
+        type: string
+        enum:
+          - SNACK
+          - DRINK
+          - DESSERT
+          - SIDE_DISH
+    SKU:
+      name: SKU
+      in: query
+      description: SKU do produto
+      required: false
+      schema:
+        type: string
+    PageParam:
+      name: page
+      in: query
+      description: Número da página (começando em 0)
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    SizeParam:
+      name: size
+      in: query
+      description: Tamanho da página (número de itens por página)
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+  requestBodies:
+    CustomerRequest:
+      description: ''
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              cpf:
+                type: string
+                pattern: ^\d{11}$
+                minLength: 11
+                maxLength: 11
+                example: '53731833697'
+              name:
+                type: string
+                minLength: 3
+                maxLength: 255
+                example: João Cardoso
+              email:
+                type: string
+                format: email
+                pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+                maxLength: 255
+                example: joao.cardoso@email.com
+              phone:
+                type: string
+                pattern: ^(?:[1-9]{2})(?:[9]{1})?(?:[0-9]{8})$
+                minLength: 10
+                maxLength: 111
+                example: '1134567890'
+            required:
+              - cpf
+              - name
+              - email
+    ProductCreateRequest:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              sku:
+                type: string
+              name:
+                type: string
+              price:
+                $ref: '#/components/schemas/Money'
+              description:
+                type: string
+              image:
+                type: string
+              category:
+                $ref: '#/components/schemas/ProductCategory'
+            required:
+              - sku
+              - name
+              - price
+              - description
+              - image
+              - category
+          examples:
+            Example 1:
+              value:
+                sku: string
+                name: string
+                price: 1946.32
+                description: string
+                image: string
+                category: SNACK
+    ProductUpdateRequest:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+              price:
+                $ref: '#/components/schemas/Money'
+              description:
+                type: string
+              image:
+                type: string
+              category:
+                $ref: '#/components/schemas/ProductCategory'
+          examples:
+            Example 1:
+              value:
+                name: string
+                price: 0
+                description: string
+                image: string
+                category: SNACK
+    CreateOrderRequest:
+      description: Requisição para criação de um novo pedido contendo cliente, lista
+        completa de itens com todos os dados necessários e observações opcionais.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              CustomerId:
+                $ref: '#/components/schemas/UUID'
+              items:
+                type: array
+                minItems: 1
+                maxItems: 100
+                description: Lista completa de itens do pedido com todos os dados
+                  necessários
+                items:
+                  $ref: '#/components/schemas/OrderItem'
+              discounts:
+                type: array
+                description: Lista de descontos aplicáveis ao pedido
+                items:
+                  $ref: '#/components/schemas/Discount'
+              notes:
+                type: array
+                description: 'Observações opcionais para o pedido (ex: retirar salada,
+                  sem cebola)'
+                items:
+                  type: string
+                  example: Remover a salada
+            required:
+              - CustomerId
+              - items
+          examples:
+            PedidoCompleto:
+              summary: Pedido completo com múltiplos itens
+              description: 'Exemplo de criação de pedido com todos os dados necessários:
+                cliente, itens completos com nome, preço, categoria e quantidade'
+              value:
+                CustomerId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                items:
+                  - productId: 441fae7b-0210-4d29-a928-90653c9a9a89
+                    name: Big Mac
+                    quantity: 2
+                    price: 25.9
+                    category: SNACK
+                    discount:
+                      value: 0.0
+                  - productId: 551fae7b-0210-4d29-a928-90653c9a9a89
+                    name: Coca-Cola 500ml
+                    quantity: 1
+                    price: 6.5
+                    category: DRINK
+                    discount:
+                      value: 0.0
+                discounts:
+                  - value: 0.0
+                notes:
+                  - Sem cebola
+            PedidoComDesconto:
+              summary: Pedido com desconto aplicado
+              description: Exemplo de pedido com desconto aplicado nos itens e no
+                total
+              value:
+                CustomerId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                items:
+                  - productId: 441fae7b-0210-4d29-a928-90653c9a9a89
+                    name: Big Mac
+                    quantity: 1
+                    price: 25.9
+                    category: SNACK
+                    discount:
+                      value: 2.5
+                discounts:
+                  - value: 2.5
+                notes:
+                  - Promoção aplicada
+    PaymentRequest:
+      description: Representa os dados necessários para iniciar o processo de pagamento
+        de um pedido. Esse objeto é enviado no corpo da requisição.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              customerId:
+                $ref: '#/components/schemas/UUID'
+              orderId:
+                $ref: '#/components/schemas/UUID'
+              paymentMethod:
+                $ref: '#/components/schemas/PaymentMethod'
+              amount:
+                $ref: '#/components/schemas/Money'
+            required:
+              - customerId
+              - orderId
+              - paymentMethod
+              - amount
+          examples:
+            Example 1:
+              value:
+                customerId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                orderId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                paymentMethod: PIX
+                amount: 1946.32
+  responses:
+    CustomerResponse:
+      description: ''
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              email:
+                type: string
+              cpf:
+                type: string
+              phone:
+                type: string
+          examples:
+            Example 1:
+              value:
+                id: 77a73531-d3ab-443e-b46a-6ff7ee5d5d29
+                name: Chaves
+                email: chaves@email.com
+                cpf: '33400276170'
+                phone: ''
+    ErrorResponse:
+      description: ''
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: integer
+              message:
+                type: string
+              error:
+                type: array
+                items:
+                  type: string
+    CreateProduct201Response:
+      description: Produto criado com sucesso!
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+          examples:
+            Example 1:
+              value:
+                id: string
+    UpdateProduct200Response:
+      description: Produto atualizado com sucesso!
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Product'
+          examples:
+            Example 1:
+              value:
+                id: 497f6eca-6276-4993-bfeb-53cbbbba6f08
+                sku: string
+                active: true
+                name: string
+                price: 0
+                description: string
+                image: string
+                category: SNACK
+    OrderListResponse:
+      description: Lista de pedidos ativos ordenados por prioridade e data
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                OrderId:
+                  $ref: '#/components/schemas/UUID'
+                customerId:
+                  $ref: '#/components/schemas/UUID'
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/OrderItem'
+                discountAmountTotal:
+                  $ref: '#/components/schemas/Money'
+                total:
+                  $ref: '#/components/schemas/Money'
+                status:
+                  $ref: '#/components/schemas/OrderStatus'
+              required:
+                - OrderId
+                - customerId
+                - items
+                - discountAmountTotal
+                - total
+                - status
+          examples:
+            Example 1:
+              value:
+                - OrderId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                  customerId: 321fae7b-0210-4d29-a928-90653c9a9a89
+                  items:
+                    - productId: 441fae7b-0210-4d29-a928-90653c9a9a89
+                      name: Big Mac
+                      quantity: 2
+                      price: 25.9
+                      category: SNACK
+                  discountAmountTotal: 0.0
+                  subtotal: 51.8
+                  total: 51.8
+                  status: DONE
+    OrderCreatedResponse:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              OrderId:
+                $ref: '#/components/schemas/UUID'
+              items:
+                type: array
+                readOnly: true
+                items:
+                  $ref: '#/components/schemas/OrderItem'
+              discounts:
+                type: array
+                readOnly: true
+                items:
+                  type: object
+                  properties:
+                    type:
+                      $ref: '#/components/schemas/DiscountType'
+                    amount:
+                      $ref: '#/components/schemas/Money'
+                    reason:
+                      type: string
+              discountAmountTotal:
+                $ref: '#/components/schemas/Money'
+              subtotal:
+                $ref: '#/components/schemas/Money'
+              total:
+                $ref: '#/components/schemas/Money'
+              status:
+                $ref: '#/components/schemas/OrderStatus'
+            required:
+              - OrderId
+              - items
+              - discountAmountTotal
+              - subtotal
+              - total
+              - status
+          examples:
+            Example 1:
+              value:
+                OrderId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                items:
+                  - productId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                    name: string
+                    quantity: 2
+                    price: 1946.32
+                    category: SNACK
+                    discount:
+                      value: 1946.32
+                discounts:
+                  - type: PERCENTAGE
+                    amount: 1946.32
+                    reason: string
+                discountAmountTotal: 1946.32
+                subtotal: 1946.32
+                total: 1946.32
+                status: RECEIVED
+    PaymentResponse:
+      description: Representa os dados retornados após o processamento de um pagamento
+        durante o checkout de um pedido.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              orderId:
+                $ref: '#/components/schemas/UUID'
+              paymentId:
+                $ref: '#/components/schemas/UUID'
+              amount:
+                $ref: '#/components/schemas/Money'
+              paymentStatus:
+                $ref: '#/components/schemas/PaymentStatus'
+              processedAt:
+                $ref: '#/components/schemas/DateTime'
+            required:
+              - orderId
+              - paymentId
+              - amount
+              - paymentStatus
+              - processedAt
+          examples:
+            Example 1:
+              value:
+                orderId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                paymentId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                amount: 1946.32
+                paymentStatus: APPROVED
+                processedAt: '2025-05-20T00:00:00Z'
+    PaymentStatusResponse:
+      description: Representa o status atual de uma transação de pagamento de forma
+        simplificada.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              paymentId:
+                $ref: '#/components/schemas/UUID'
+              status:
+                $ref: '#/components/schemas/PaymentStatus'
+            required:
+              - paymentId
+              - status
+          examples:
+            Example 1:
+              value:
+                paymentId: 241fae7b-0210-4d29-a928-90653c9a9a89
+                status: APPROVED
+    Product200ListResponse:
+      description: Example response
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  $ref: '#/components/schemas/UUID'
+                sku:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                price:
+                  $ref: '#/components/schemas/Money'
+                active:
+                  type: boolean
+                image:
+                  type: string
+                category:
+                  $ref: '#/components/schemas/ProductCategory'
+          examples:
+            Example 1:
+              value:
+                - id: 241fae7b-0210-4d29-a928-90653c9a9a89
+                  sku: string
+                  name: string
+                  description: string
+                  price: 1946.32
+                  active: true
+                  image: string
+                  category: SNACK
+  schemas:
+    ErrorResponse:
+      type: object
+      title: ErrorResponse
+      description: Response de erro
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+        error:
+          type: array
+          items:
+            type: string
+      example:
+        status: 400
+        message: Requisição inválida
+        error:
+          - Campo obrigatório 'email' não informado
+    UUID:
+      type: string
+      title: UUID
+      description: Identificador único universal no formato UUID.
+      format: uuid
+      pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      minLength: 36
+      maxLength: 36
+      example: 241fae7b-0210-4d29-a928-90653c9a9a89
+    Money:
+      type: number
+      title: Money
+      description: Valor monetário representado em formato brasileiro (R$), com suporte
+        a casas decimais.
+      format: double
+      example: 1946.32
+    ProductCategory:
+      type: string
+      enum:
+        - SNACK
+        - DRINK
+        - DESSERT
+        - SIDE_DISH
+      title: ProductCategory
+    OrderItem:
+      type: object
+      title: OrderItem
+      description: Item individual de um pedido, contendo todas as informações do
+        produto e quantidade solicitada.
+      properties:
+        productId:
+          $ref: '#/components/schemas/UUID'
+        name:
+          type: string
+          description: Nome do produto
+          example: Big Mac
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          description: Quantidade solicitada do produto
+          example: 2
+        price:
+          $ref: '#/components/schemas/Money'
+        category:
+          $ref: '#/components/schemas/Category'
+        discount:
+          $ref: '#/components/schemas/Discount'
+      required:
+        - productId
+        - name
+        - quantity
+        - price
+        - category
+    Category:
+      type: string
+      enum:
+        - SNACK
+        - DRINK
+        - DESSERT
+        - SIDE_DISH
+      title: Category
+      description: Categoria do produto dentro do pedido.
+    Discount:
+      type: object
+      properties:
+        value:
+          $ref: '#/components/schemas/Money'
+      required:
+        - value
+    PaymentMethod:
+      type: string
+      enum:
+        - PIX
+      title: PaymentMethod
+      readOnly: true
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        active:
+          type: boolean
+        name:
+          type: string
+        price:
+          $ref: '#/components/schemas/Money'
+        description:
+          type: string
+        image:
+          type: string
+        category:
+          $ref: '#/components/schemas/ProductCategory'
+      required:
+        - id
+        - sku
+        - active
+        - name
+        - price
+        - description
+        - image
+        - category
+    DiscountType:
+      type: string
+      enum:
+        - PERCENTAGE
+        - FIXED
+      title: DiscountType
+      readOnly: true
+    OrderStatus:
+      type: string
+      enum:
+        - RECEIVED
+        - AWAITING_PAYMENT
+        - PAID
+        - IN_PREPARATION
+        - DONE
+        - DELIVERED
+      title: OrderStatus
+      readOnly: true
+    PaymentStatus:
+      type: string
+      enum:
+        - APPROVED
+        - DECLINED
+        - FAILED
+        - PENDING
+        - FINISHED
+      title: PaymentStatus
+      readOnly: true
+    PaymentInitiationResult:
+      type: object
+      title: PaymentInitiationResult
+      description: Resultado da iniciação de pagamento contendo ID do pagamento e
+        URL para redirecionamento
+      properties:
+        paymentId:
+          $ref: '#/components/schemas/UUID'
+        paymentUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: 'URL de pagamento gerada pelo gateway (ex: Mercado Pago). Será
+            null em caso de falha no processamento.'
+          example: https://www.mercadopago.com/mlb/payments/ticket?foo=bar
+      required:
+        - paymentId
+      example:
+        paymentId: 241fae7b-0210-4d29-a928-90653c9a9a89
+        paymentUrl: https://www.mercadopago.com/mlb/payments/ticket?foo=bar
+    DateTime:
+      type: string
+      title: DateTime
+      description: Data e hora no formato ISO 8601
+      format: date-time
+      example: '2025-05-20T00:00:00Z'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
