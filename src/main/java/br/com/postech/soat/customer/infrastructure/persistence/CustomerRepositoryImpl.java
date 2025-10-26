@@ -1,8 +1,8 @@
 package br.com.postech.soat.customer.infrastructure.persistence;
 
 import br.com.postech.soat.commons.infrastructure.aop.monitorable.Monitorable;
-import br.com.postech.soat.customer.domain.entity.Customer;
 import br.com.postech.soat.customer.application.repositories.CustomerRepository;
+import br.com.postech.soat.customer.domain.entity.Customer;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;

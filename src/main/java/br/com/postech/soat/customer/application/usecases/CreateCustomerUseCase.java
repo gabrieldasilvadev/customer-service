@@ -2,8 +2,8 @@ package br.com.postech.soat.customer.application.usecases;
 
 import br.com.postech.soat.customer.application.dto.CreateCustomerDto;
 import br.com.postech.soat.customer.application.repositories.CustomerRepository;
-import br.com.postech.soat.customer.domain.exception.CustomerAlreadyExistsException;
 import br.com.postech.soat.customer.domain.entity.Customer;
+import br.com.postech.soat.customer.domain.exception.CustomerAlreadyExistsException;
 import br.com.postech.soat.customer.domain.valueobject.CPF;
 import br.com.postech.soat.customer.domain.valueobject.Email;
 import br.com.postech.soat.customer.domain.valueobject.Name;
