@@ -1,4 +1,4 @@
-package br.com.postech.soat.commons.infrastructure.aop.monitorable;
+package br.com.postech.soat.customer.commons.infrastructure.aop.monitorable;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -30,7 +30,7 @@ public class MonitoringAspect {
     }
 
     @Around("@within(monitorable)")
-    public Object monitor(ProceedingJoinPoint joinPoint, Monitorable monitorable) throws Throwable {
+    public Object monitor(ProceedingJoinPoint joinPoint, br.com.postech.soat.commons.infrastructure.aop.monitorable.Monitorable monitorable) throws Throwable {
         String clazz = joinPoint.getSignature().getDeclaringType().getSimpleName();
         String method = joinPoint.getSignature().getName();
         String monitorName = monitorable.value().isBlank() ? clazz : monitorable.value();
