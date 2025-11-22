@@ -16,14 +16,15 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/customer}
     username: ${DB_USER:admin}
     password: ${DB_PASSWORD:123456}
-    driver-class-name: org.postgresql.Driver
+    driver-class-name: ${DB_DRIVER:org.postgresql.Driver}
   jpa:
     show-sql: ${DB_SHOW_SQL:true}
     properties:
       hibernate:
         format_sql: true
+        dialect: ${HIBERNATE_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
   flyway:
-    enabled: true
+    enabled: ${FLYWAY_ENABLED:true}
     baseline-on-migrate: true
     placeholder-replacement: false
 

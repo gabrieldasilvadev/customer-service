@@ -1,0 +1,150 @@
+name: Java CI
+
+on:
+  push:
+    branches:
+      - develop
+
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, closed]
+
+  workflow_dispatch:
+
+env:
+  GITHUB_SHA: ${{ github.sha }}
+  SHORT_SHA: $(echo $GITHUB_SHA | cut -c1-7)
+  IMAGE_TAG: ${{ github.event.repository.name }}:$(echo $GITHUB_SHA | cut -c1-7)
+  IMAGE_TAG_GITHUB: ghcr.io/${{ github.repository }}:${{ github.sha }}
+  THRESHOLD: 90.0
+
+jobs:
+  DockerBuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setting Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          no-cache: true
+          target: builder
+          tags: ${{ env.IMAGE_TAG_GITHUB }}
+
+  UnitTest:
+    runs-on: ubuntu-latest
+    needs: DockerBuild
+    steps:
+      - name: Login GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Image Docker
+        run: docker pull ${{ env.IMAGE_TAG_GITHUB }}
+
+      - name: test
+        run: docker run -e DB_URL="jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH" -e DB_DRIVER=org.h2.Driver -e HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect -e FLYWAY_ENABLED=false -e DB_USER=sa -e DB_PASSWORD= -v ${{ github.workspace }}/coverage:/app/target/site/jacoco/ --rm ${{ env.IMAGE_TAG_GITHUB }} --privileged sh -c "dockerd & sleep 5 && mvn compile test"
+
+  Package:
+    runs-on: ubuntu-latest
+    needs: UnitTest
+    steps:
+      - name: Login GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Image Docker
+        run: docker pull ${{ env.IMAGE_TAG_GITHUB }}
+
+      - name: Package
+        run: docker run --rm ${{ env.IMAGE_TAG_GITHUB }} mvn clean package -DskipTests --batch-mode
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: Package
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: build-image
+        env:
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}:${{ env.SHORT_SHA }}
+        run: |
+          docker build ./backend/soat -t ${{ env.IMAGE_TAG }}
+          docker tag ${{ env.IMAGE_TAG }}  ${{ env.ECR_REPOSITORY }}
+          docker push ${{ env.ECR_REPOSITORY }}
+
+      - name: Update kubeconfig
+        run: |
+          CLUSTER_NAME=$(aws eks list-clusters --region ${{ secrets.AWS_REGION }} --query "clusters[0]" --output text)
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name $CLUSTER_NAME
+
+      - name: Install moreutils (for sponge)
+        run: sudo apt install moreutils
+
+      - name: Deploy to Kubernetes
+        env:
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}:${{ env.SHORT_SHA }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+          SOAT_DB_USER: ${{ secrets.SOAT_DB_USER }}
+          SOAT_DB_PASS: ${{ secrets.SOAT_DB_PASS }}
+          SOAT_DB: ${{ secrets.SOAT_DB }}
+          SOAT_DB_URL: ${{ secrets.SOAT_DB_URL }}
+        run: |
+          export K8S_IMAGE_TAG=${{ env.ECR_REPOSITORY }}
+          export REPOSITORY_NAME=${{ env.REPOSITORY_NAME }}
+          export SOAT_DB_USER=${{ env.SOAT_DB_USER }}
+          export SOAT_DB_PASS=${{ env.SOAT_DB_PASS }}
+          export SOAT_DB=${{ env.SOAT_DB }}
+          export SOAT_DB_URL=${{ env.SOAT_DB_URL }}
+
+          envsubst < infra/namespace.yml | sponge infra/namespace.yml
+          envsubst < infra/secrets/soat-backend.yml | sponge infra/secrets/soat-backend.yml
+          envsubst < infra/configmaps/soat-backend.yml | sponge infra/configmaps/soat-backend.yml
+          envsubst < infra/deployments/soat-backend.yml | sponge infra/deployments/soat-backend.yml
+          envsubst < infra/services/soat-backend.yml | sponge infra/services/soat-backend.yml
+
+          kubectl apply -k infra/
+          kubectl rollout status deployment/soat-backend -n soat
