@@ -4,7 +4,6 @@ import br.com.postech.soat.commons.api.ErrorResponseDto;
 import br.com.postech.soat.commons.infrastructure.exception.BaseException;
 import br.com.postech.soat.commons.infrastructure.exception.NotFoundException;
 import br.com.postech.soat.commons.infrastructure.exception.ResourceConflictException;
-import br.com.postech.soat.commons.infrastructure.exception.UnprocessableEntityException;
 import java.util.Collections;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,16 +41,6 @@ public class GlobalExceptionHandler {
             .error(Collections.singletonList(e.getMessage()));
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
-    }
-
-    @ExceptionHandler(UnprocessableEntityException.class)
-    public ResponseEntity<ErrorResponseDto> handleUnprocessableException(UnprocessableEntityException e) {
-        ErrorResponseDto errorResponse = new ErrorResponseDto()
-            .status(422)
-            .message("Unprocessable Entity")
-            .error(Collections.singletonList(e.getMessage()));
-
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorResponse);
     }
 }
 

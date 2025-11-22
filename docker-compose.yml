@@ -1,0 +1,54 @@
+services:
+  #  customer-service-backend:
+  #    container_name: customer-service-backend
+  #    build:
+  #      context: .
+  #      dockerfile: Dockerfile
+  #    image: soat:latest
+  #    environment:
+  #      DB_URL: jdbc:postgresql://customer-service-postgres:5432/soat
+  #      DB_USER: ${DB_USER}
+  #      DB_PASS: ${DB_PASS}
+  #    depends_on:
+  #      customer-service-postgres:
+  #        condition: service_healthy
+  #    networks:
+  #      - soat-network
+  #    ports:
+  #      - "8080:8080"
+  #    restart: always
+  #    healthcheck:
+  #      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+  #      interval: 30s
+  #      timeout: 10s
+  #      retries: 3
+  #      start_period: 40s?
+
+  customer-service-postgres:
+    image: postgres:17
+    container_name: customer-service-postgres
+    environment:
+      - POSTGRES_DB=customer
+      - POSTGRES_USER=${DB_USER:-admin}
+      - POSTGRES_PASSWORD=${DB_PASS:-123456}
+    ports:
+      - "5432:5432"
+    networks:
+      - soat-network
+    volumes:
+      - customer-service-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d soat" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  soat-network:
+    driver: bridge
+    name: soat-network
+
+volumes:
+  customer-service-postgres-data:
+    name: customer-service-postgres-data
