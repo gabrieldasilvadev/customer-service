@@ -1,1 +1,0 @@
-ALTER TABLE order_items ADD COLUMN product_category VARCHAR(10) NOT NULL;

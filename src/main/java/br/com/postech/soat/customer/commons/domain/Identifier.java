@@ -1,5 +1,5 @@
-package br.com.postech.soat.commons.domain;
-
+package br.com.postech.soat.customer.commons.domain;
+import br.com.postech.soat.commons.domain.ValueObject;
 import java.util.UUID;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;

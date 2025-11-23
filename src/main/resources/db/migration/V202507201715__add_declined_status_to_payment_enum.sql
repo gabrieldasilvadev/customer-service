@@ -1,1 +1,0 @@
-ALTER TYPE payment_status ADD VALUE 'DECLINED';
