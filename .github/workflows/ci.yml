@@ -63,8 +63,7 @@ jobs:
         run: docker pull ${{ env.IMAGE_TAG_GITHUB }}
 
       - name: test
-        run: docker run -e DB_URL="jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH" -e DB_DRIVER=org.h2.Driver -e HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect -e FLYWAY_ENABLED=false -e DB_USER=sa -e DB_PASSWORD= -v ${{ github.workspace }}/coverage:/app/target/site/jacoco/ --rm ${{ env.IMAGE_TAG_GITHUB }} --privileged sh -c "dockerd & sleep 5 && mvn compile test"
-
+        run: docker run -e DB_URL="jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH" -e DB_DRIVER=org.h2.Driver -e HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect -e FLYWAY_ENABLED=false -e DB_USER=sa -e DB_PASSWORD= --privileged -v ${{ github.workspace }}/coverage:/app/target/site/jacoco/ --rm ${{ env.IMAGE_TAG_GITHUB }} sh -c "dockerd & sleep 5 && mvn compile test"
   Package:
     runs-on: ubuntu-latest
     needs: UnitTest
