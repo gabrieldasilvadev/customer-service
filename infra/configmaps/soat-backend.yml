@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: customer-service-backend-config
+  namespace: customer-service
+  labels:
+    app: customer-service-backend
+    tier: backend
+  annotations:
+    maintainer: "SOAT - Grupo 75"
+    description: "ConfigMap com variáveis de ambiente para o backend"
+data:
+  DB_URL: ${SOAT_DB_URL}

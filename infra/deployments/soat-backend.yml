@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-service-backend
+  namespace: customer-service
+  labels:
+    app: customer-service-backend
+    tier: backend
+  annotations:
+    maintainer: "SOAT - Grupo 75"
+    description: "Deployment do backend da aplicação Java"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: customer-service-backend
+  template:
+    metadata:
+      labels:
+        app: customer-service-backend
+    spec:
+      containers:
+        - name: customer-service-backend
+          image: ${K8S_IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          envFrom:
+            - configMapRef:
+                name: customer-service-backend-config
+            - secretRef:
+                name: customer-service-backend-secret
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            failureThreshold: 60
+            timeoutSeconds: 5
+            periodSeconds: 5
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
